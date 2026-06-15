@@ -19,14 +19,8 @@ class TestCase extends Orchestra
         $app['config']->set('systempay', [
             'default' => [
                 'site_id' => '12345678',
-                'key'     => '1122334455667788',
-                'env'     => 'TEST',
-            ],
-            'sha1' => [
-                'site_id' => '12345678',
-                'key'     => '1122334455667788',
-                'env'     => 'TEST',
-                'algo'    => 'sha1',
+                'key' => '1122334455667788',
+                'env' => 'TEST',
             ],
         ]);
     }
