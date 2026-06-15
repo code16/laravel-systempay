@@ -1,5 +1,12 @@
 .idea
-vendor
+.phpunit.cache
+build
 composer.lock
-composer.phar
-.phpunit.result.cache
+coverage
+docs
+phpunit.xml
+phpstan.neon
+testbench.yaml
+vendor
+node_modules
+.DS_Store
