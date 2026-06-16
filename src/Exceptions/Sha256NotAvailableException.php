@@ -6,5 +6,4 @@ use Exception;
 
 class Sha256NotAvailableException extends Exception
 {
-
 }

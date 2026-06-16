@@ -2,8 +2,8 @@
 
 use Code16\Systempay\Exceptions\SystemPayConfigException;
 use Code16\Systempay\Facades\SystemPay;
-use Illuminate\Support\Facades\Blade;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Blade;
 
 $renderSignature = 'c60bedc09fae8040d35faabb9f526244';
 
@@ -11,30 +11,29 @@ test('config not found', function () {
     SystemPay::config('noconfig');
 })->throws(SystemPayConfigException::class, 'No configuration "noconfig" found');
 
-
 test('signature sha256', function () {
     $pay = SystemPay::set([
-        'amount'     => 51.24,
+        'amount' => 51.24,
         'trans_date' => '20170129130025',
-        'trans_id'   => '123456',
+        'trans_id' => '123456',
     ]);
 
     $render = Blade::render('<x-systempay::form :config="$pay"></x-systempay::form>', [
-        'pay' => $pay
+        'pay' => $pay,
     ]);
 
     expect($render)->toMatch('#name="signature" value="ycA5Do5tNvsnKdc\/eP1bj2xa19z9q3iWPy9\/rpesfS0\="#');
 });
 
 test('blade extension', function () {
-    $payment = (new \Code16\Systempay\SystemPay())->set([
-        'amount'     => 51.24,
+    $payment = (new Code16\Systempay\SystemPay())->set([
+        'amount' => 51.24,
         'trans_date' => '20170129130025',
-        'trans_id'   => '123456',
+        'trans_id' => '123456',
     ]);
 
     $render = Blade::render('<x-systempay::form :config="$payment"><button type="submit">Pay</button></x-systempay::form>', [
-        'payment' => $payment
+        'payment' => $payment,
     ]);
 
     expect($render)->toContain('name="vads_amount" value="5124"')
@@ -42,14 +41,14 @@ test('blade extension', function () {
 });
 
 test('blade component with custom variable name', function () {
-    $myPayment = (new \Code16\Systempay\SystemPay())->set([
-        'amount'     => 51.24,
+    $myPayment = (new Code16\Systempay\SystemPay())->set([
+        'amount' => 51.24,
         'trans_date' => '20170129130025',
-        'trans_id'   => '123456',
+        'trans_id' => '123456',
     ]);
 
     $render = Blade::render('<x-systempay::form :config="$myPayment"><button type="submit">Pay</button></x-systempay::form>', [
-        'myPayment' => $myPayment
+        'myPayment' => $myPayment,
     ]);
 
     expect($render)->toContain('name="vads_amount" value="5124"')
@@ -57,14 +56,14 @@ test('blade component with custom variable name', function () {
 });
 
 test('blade component with default button', function () {
-    $payment = (new \Code16\Systempay\SystemPay())->set([
-        'amount'     => 51.24,
+    $payment = (new Code16\Systempay\SystemPay())->set([
+        'amount' => 51.24,
         'trans_date' => '20170129130025',
-        'trans_id'   => '123456',
+        'trans_id' => '123456',
     ]);
 
     $render = Blade::render('<x-systempay::form :config="$payment" />', [
-        'payment' => $payment
+        'payment' => $payment,
     ]);
 
     expect($render)->toContain('<button type="submit">Pay</button>');

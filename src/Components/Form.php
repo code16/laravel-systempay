@@ -11,7 +11,7 @@ class Form extends Component
     public function __construct(
         protected ?SystemPay $config = null
     ) {
-        if(!$config) {
+        if (!$config) {
             throw new SystemPayMissingPaymentConfigException('Please provide a SystemPay payment configuration to build the form');
         }
     }
@@ -19,7 +19,7 @@ class Form extends Component
     public function render()
     {
         return view('systempay::components.form', [
-            'config' => $this->config
+            'config' => $this->config,
         ]);
     }
 }

@@ -8,16 +8,16 @@ use Code16\Systempay\Exceptions\SystemPayConfigException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
-class SystemPay {
-
+class SystemPay
+{
     protected string $key;
     protected array $params = [];
     public string $url = 'https://paiement.systempay.fr/vads-payment/';
 
     /**
      * Systempay constructor.
+     *
      * @throws SystemPayConfigException
-     * @param string $config
      */
     public function __construct(string $config = 'default')
     {
@@ -25,9 +25,10 @@ class SystemPay {
     }
 
     /**
-     * @param string $config
-     * @throws SystemPayConfigException
+     * @param  string  $config
      * @return self
+     *
+     * @throws SystemPayConfigException
      */
     public function config(string $configName = 'default'): static
     {
@@ -41,30 +42,31 @@ class SystemPay {
             $config['params'] = [];
         }
 
-        if(isset($config['api_url'])) {
+        if (isset($config['api_url'])) {
             // allow to use a custom endpoint
             $this->url = $config['api_url'];
         }
 
         $this->set($config['params'] + [
-                'ctx_mode'       => $config['env'] ?? '',
-                'site_id'        => $config['site_id'] ?? '',
-                'amount'         => 0,
-                'page_action'    => 'PAYMENT',
-                'action_mode'    => 'INTERACTIVE',
-                'payment_config' => 'SINGLE',
-                'version'        => 'V2',
-                'currency'       => '978',
-            ]);
+            'ctx_mode' => $config['env'] ?? '',
+            'site_id' => $config['site_id'] ?? '',
+            'amount' => 0,
+            'page_action' => 'PAYMENT',
+            'action_mode' => 'INTERACTIVE',
+            'payment_config' => 'SINGLE',
+            'version' => 'V2',
+            'currency' => '978',
+        ]);
 
         return $this;
     }
 
     /**
      * Set parameter(s). You can do a massive assignment by passing an associative array as $param.
-     * @param string|array $param
-     * @param string       $value
-     * @return self
+     *
+     * @param  string|array  $param
+     * @param  string  $value
+     *
      * @see https://paiement.systempay.fr/doc/fr-FR/form-payment/quick-start-guide/envoyer-un-formulaire-de-paiement-en-post.html
      */
     public function set($param, $value = null): self
@@ -76,6 +78,7 @@ class SystemPay {
         foreach ($param as $k => $v) {
             if ($v === null || $v === '') {
                 unset($this->params[$k]);
+
                 continue;
             }
 
@@ -97,16 +100,16 @@ class SystemPay {
 
     /**
      * @throws Sha256NotAvailableException
-     * @return string
      */
     private function getSignature(): string
     {
         $str = implode('+', $this->params).'+'.$this->key;
 
-        if(($this->params['signature_algo'] ?? null) === 'sha1') {
+        if (($this->params['signature_algo'] ?? null) === 'sha1') {
             $params = $this->params;
             unset($params['signature_algo']);
             $str = implode('+', $params).'+'.$this->key;
+
             return sha1($str);
         }
 
@@ -118,9 +121,9 @@ class SystemPay {
     }
 
     /**
-     * @param Request $request The IPN request
-     * @param string $config The config profile to use
-     * @return bool
+     * @param  Request  $request  The IPN request
+     * @param  string  $config  The config profile to use
+     *
      * @throws InvalidSystemPaySignatureException
      * @throws SystemPayConfigException
      */
@@ -128,7 +131,7 @@ class SystemPay {
     {
         $key = config("systempay.{$config}.key");
 
-        if(empty($key)) {
+        if (empty($key)) {
             throw new SystemPayConfigException('No key found for config '.$config);
         }
 
@@ -158,9 +161,8 @@ class SystemPay {
     }
 
     /**
-     * @param Request $request The IPN request
-     * @param array $validStatus The list of valid status (default: ['CAPTURED', 'ACCEPTED', 'AUTHORISED'])
-     * @return bool
+     * @param  Request  $request  The IPN request
+     * @param  array  $validStatus  The list of valid status (default: ['CAPTURED', 'ACCEPTED', 'AUTHORISED'])
      */
     public function isValidPayment(Request $request, array $validStatus = ['CAPTURED', 'ACCEPTED', 'AUTHORISED']): bool
     {
@@ -169,7 +171,6 @@ class SystemPay {
     }
 
     /**
-     * @param Request $request
      * @return array Array of order_id, transaction_id, transaction_uuid
      */
     public function retrieveOrderAndTransaction(Request $request): array
@@ -181,11 +182,10 @@ class SystemPay {
         ];
     }
 
-
     /**
      * Prepare the form parameters.
+     *
      * @throws Sha256NotAvailableException
-     * @return array
      */
     public function prepareFormParams(): array
     {

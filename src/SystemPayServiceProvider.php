@@ -2,7 +2,6 @@
 
 namespace Code16\Systempay;
 
-use Code16\Systempay\Components\Form;
 use Illuminate\Support\Facades\Blade;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
