@@ -120,16 +120,16 @@ test('retrieve payment amount and currency', function () {
 
     [$amount, $currency] = SystemPay::retrievePaymentAmountAndCurrency($request);
 
-    expect($amount)->toBe('5124')
+    expect($amount)->toBe(5124)
         ->and($currency)->toBe('978');
 });
 
-test('retrieve payment amount and currency defaults to empty strings when missing', function () {
+test('retrieve payment amount and currency defaults to zero amount and empty currency when missing', function () {
     $request = new Request();
 
     [$amount, $currency] = SystemPay::retrievePaymentAmountAndCurrency($request);
 
-    expect($amount)->toBe('')
+    expect($amount)->toBe(0)
         ->and($currency)->toBe('');
 });
 
