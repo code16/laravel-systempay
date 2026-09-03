@@ -55,6 +55,10 @@ Also see [Systempay documentation](https://paiement.systempay.fr/doc/fr-FR/form-
 **NB** : you don't have to add the `vads_` prefix to parameters, the prefix will be automaticaly added.
 But you can also set the parameters with the `vads_` prefix, it will be automaticaly removed.
 
+**NB** : `amount` must be given as an integer in the smallest currency unit expected by Systempay
+(e.g. cents for EUR). For example, use `1234` for 12.34€, not `12.34`. No unit conversion is
+performed by this package.
+
 There is also possible to set some specific parameters to a configuration by setting `params` values.
 
 Example :
@@ -95,7 +99,7 @@ To use another configuration, call the `config` method, for example :
 
 ```php 
 $systemPay = SystemPay::config('store_uk')->set([
-    'amount' => 12.34,
+    'amount' => 1234, // 12.34€, in cents
     'trans_id' => 123456
 ]);
 ```
@@ -124,11 +128,15 @@ class PaymentCallbackController extends Controller
         // 2. Check if the payment is valid (status is ACCEPTED, CAPTURED, or AUTHORISED)
         if (! SystemPay::isValidPayment($request)) {
             // Payment refused or cancelled
-            return response()->json(['status' => 'error']);
+            abort(400, 'Invalid payment');
         }
 
         // 3. Retrieve order information
         [$orderId, $transId, $uuid] = SystemPay::retrieveOrderAndTransaction($request);
+        
+        // 4. Verify the paid amount and currency
+        [$paidAmount, $currencyCode] = SystemPay::retrievePaymentAmountAndCurrency($request);
+        abort_unless(Order::find($orderId)->amount == $paidAmount, 400, 'Invalid amount');
 
         // Update your database...
 
@@ -168,7 +176,7 @@ class PaymentController extends Controller
     public function create()
     {
         $systemPay = SystemPay::set([
-            'amount' => 12.34,
+            'amount' => 1234, // 12.34€, in cents
             'trans_id' => 123456
         ]);
         

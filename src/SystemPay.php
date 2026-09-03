@@ -36,7 +36,11 @@ class SystemPay
             throw new SystemPayConfigException(sprintf('No configuration "%s" found', $configName));
         }
 
-        $this->key = $config['key'] ?? '';
+        if (empty($config['key'])) {
+            throw new SystemPayConfigException('No key found for config '.$configName);
+        }
+
+        $this->key = $config['key'];
 
         if (!isset($config['params'])) {
             $config['params'] = [];
@@ -64,6 +68,9 @@ class SystemPay
     /**
      * Set parameter(s). You can do a massive assignment by passing an associative array as $param.
      *
+     * Note: `amount` must be given as an integer in the smallest currency unit (e.g. cents for
+     * EUR), as expected by Systempay. It is stored as-is, no conversion is performed.
+     *
      * @param  string|array  $param
      * @param  string  $value
      *
@@ -86,10 +93,6 @@ class SystemPay
                 $k = preg_replace('#^vads_#', '', $k);
             }
 
-            if ($k === 'amount') {
-                $v = (int) ($v * 100);
-            }
-
             $this->params[$k] = (string) $v;
         }
 
@@ -103,19 +106,11 @@ class SystemPay
      */
     private function getSignature(): string
     {
-        $str = implode('+', $this->params).'+'.$this->key;
-
-        if (($this->params['signature_algo'] ?? null) === 'sha1') {
-            $params = $this->params;
-            unset($params['signature_algo']);
-            $str = implode('+', $params).'+'.$this->key;
-
-            return sha1($str);
-        }
-
         if (!in_array('sha256', hash_hmac_algos())) {
             throw new Sha256NotAvailableException('Algorithm SHA-256 is not available on this server');
         }
+
+        $str = implode('+', $this->params).'+'.$this->key;
 
         return base64_encode(hash_hmac('sha256', $str, $this->key, true));
     }
@@ -179,6 +174,14 @@ class SystemPay
             $request->string('vads_order_id')->toString(),
             $request->string('vads_trans_id')->toString(),
             $request->string('vads_trans_uuid')->toString(),
+        ];
+    }
+
+    public function retrievePaymentAmountAndCurrency(Request $request): array
+    {
+        return [
+            $request->string('vads_amount')->toString(),
+            $request->string('vads_currency')->toString(),
         ];
     }
 

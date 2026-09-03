@@ -9,7 +9,7 @@
 <input type="hidden" name="{{ $key }}" value="{{ $value }}">
 @endforeach
 {{ $slot ?? '' }}
-@if(!$button && (isset($button) && $button->isEmpty() || isset($slot) && $slot->isEmpty()))
+@if(!$button && isset($slot) && $slot->isEmpty())
 <button type="submit">Pay</button>
 @elseif(isset($slot) && $slot->isEmpty())
 {{ $button }}
