@@ -180,7 +180,7 @@ class SystemPay
     public function retrievePaymentAmountAndCurrency(Request $request): array
     {
         return [
-            $request->string('vads_amount')->toString(),
+            $request->string('vads_amount')->toInteger(),
             $request->string('vads_currency')->toString(),
         ];
     }
