@@ -21,6 +21,7 @@ class TestCase extends Orchestra
                 'site_id' => '12345678',
                 'key' => '1122334455667788',
                 'env' => 'TEST',
+                'password' => 'testpassword_1122334455667788',
             ],
         ]);
     }

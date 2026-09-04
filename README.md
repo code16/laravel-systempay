@@ -5,6 +5,11 @@
 * Fast and easy form generation for Systempay (by Banque Populaire)
 * Support multiple site id for multiple stores within the same project
 * Validate payment signature and status
+* Cancel or refund a transaction (Using the API-REST)
+* Retrieve a transaction's data (Using the API-REST)
+
+> [!NOTE]
+> If you want to use this SystemPay client to cancel or refund transactions, you must create also a REST API key in the SystemPay Back Office.
 
 ## Installation
 
@@ -30,11 +35,19 @@ return [
         'site_id' => 'YOUR_SITE_ID',
         'key'     => env('SYSTEMPAY_SITE_KEY', 'YOUR_KEY'),
         'env'     => env('SYSTEMPAY_ENV', 'PRODUCTION'),
+        // if using API REST
+        'password' => env('SYSTEMPAY_REST_API_PASSWORD'),
     ]
 ];
 ```
 
 You need to set `YOUR_SITE_ID` and `YOUR_KEY` with your own values. This two values are given by Systempay.
+
+`key` is only used to sign/verify the payment form and IPN callbacks. To use `cancel()`, `refund()`,
+`cancelOrRefund()` (see [Cancel or refund a payment](#cancel-or-refund-a-payment)) or `getTransaction()`
+(see [Get a transaction](#get-a-transaction)), you also need to set `password`, the REST API password
+found in the Back Office, under **Paramétrage > Boutique > Clés d'API REST** (use the test or
+production password depending on `env`).
 
 ### Specific parameters
 
@@ -195,4 +208,73 @@ In your view
         </button>
     </x-slot:button>
 </x-systempay::form>
+```
+
+## Cancel or refund a payment
+
+Use `cancel()` to cancel a transaction that has not been captured yet (i.e. before it is remised
+en banque), and `refund()` to refund a captured transaction, totally or partially. Both need the
+transaction `uuid`, as returned by `retrieveOrderAndTransaction()`.
+
+```php
+use SystemPay;
+
+// Cancel a transaction, with an optional comment
+SystemPay::cancel($uuid, 'Order cancelled by customer');
+
+// Refund a transaction in full
+SystemPay::refund($uuid);
+
+// Refund a transaction partially: amount in the smallest currency unit (e.g. cents for EUR)
+SystemPay::refund($uuid, amount: 1000, currency: 'EUR');
+```
+
+Both throw `Code16\Systempay\Exceptions\SystemPayApiException` if Systempay rejects the request
+(e.g. the transaction cannot be cancelled or refunded in its current state). The exception's
+`response()` method returns the decoded API response, including the `errorCode` returned by
+Systempay:
+
+```php
+use Code16\Systempay\Exceptions\SystemPayApiException;
+
+try {
+    SystemPay::refund($uuid);
+} catch (SystemPayApiException $e) {
+    logger()->error($e->getMessage(), $e->response());
+}
+```
+
+Under the hood, both call the `Transaction/CancelOrRefund` Web Service, which lets Systempay pick
+the operation automatically based on the transaction's status. You can call it directly and force
+the operation with `resolutionMode` (`AUTO`, `CANCELLATION_ONLY` or `REFUND_ONLY`):
+
+```php
+SystemPay::cancelOrRefund($uuid, amount: 1000, currency: 'EUR', resolutionMode: 'REFUND_ONLY');
+```
+
+As with `validateSignature`, pass a configuration name as the last argument to target a specific
+store:
+
+```php
+SystemPay::refund($uuid, config: 'store_uk');
+```
+
+## Get a transaction
+
+Use `getTransaction()` to retrieve all the data Systempay holds for a transaction, identified by
+its `uuid` (as returned by `retrieveOrderAndTransaction()`):
+
+```php
+$transaction = SystemPay::getTransaction($uuid);
+
+$transaction['status']; // e.g. "CAPTURED"
+$transaction['amount']; // in the smallest currency unit (e.g. cents for EUR)
+```
+
+It calls the `Transaction/Get` Web Service and, like `cancel()`/`refund()`, throws
+`SystemPayApiException` if Systempay rejects the request, and accepts a configuration name as the
+second argument:
+
+```php
+SystemPay::getTransaction($uuid, 'store_uk');
 ```

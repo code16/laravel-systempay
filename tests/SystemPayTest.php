@@ -2,11 +2,13 @@
 
 use Code16\Systempay\Components\Form;
 use Code16\Systempay\Exceptions\InvalidSystemPaySignatureException;
+use Code16\Systempay\Exceptions\SystemPayApiException;
 use Code16\Systempay\Exceptions\SystemPayConfigException;
 use Code16\Systempay\Exceptions\SystemPayMissingPaymentConfigException;
 use Code16\Systempay\Facades\SystemPay;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Http;
 
 test('config not found', function () {
     SystemPay::config('noconfig');
@@ -240,3 +242,163 @@ test('is valid payment accepts a custom list of valid statuses', function () {
 test('form component throws when no payment config is provided', function () {
     new Form();
 })->throws(SystemPayMissingPaymentConfigException::class, 'Please provide a SystemPay payment configuration to build the form');
+
+test('cancel sends a CANCELLATION_ONLY request to Transaction/CancelOrRefund', function () {
+    Http::fake([
+        'api.systempay.fr/*' => Http::response([
+            'status' => 'SUCCESS',
+            'answer' => ['uuid' => 'UUID789', 'status' => 'UNPAID', 'detailedStatus' => 'CANCELLED'],
+        ]),
+    ]);
+
+    $answer = SystemPay::cancel('UUID789', 'customer request');
+
+    expect($answer)->toBe(['uuid' => 'UUID789', 'status' => 'UNPAID', 'detailedStatus' => 'CANCELLED']);
+
+    Http::assertSent(function ($request) {
+        return $request->url() === 'https://api.systempay.fr/api-payment/V4/Transaction/CancelOrRefund'
+            && $request->method() === 'POST'
+            && $request['uuid'] === 'UUID789'
+            && $request['resolutionMode'] === 'CANCELLATION_ONLY'
+            && $request['comment'] === 'customer request'
+            && !isset($request['amount'])
+            && !isset($request['currency'])
+            && $request->hasHeader('Authorization', 'Basic '.base64_encode('12345678:testpassword_1122334455667788'));
+    });
+});
+
+test('refund sends a REFUND_ONLY request with the given amount and currency', function () {
+    Http::fake([
+        'api.systempay.fr/*' => Http::response([
+            'status' => 'SUCCESS',
+            'answer' => ['uuid' => 'UUID789', 'status' => 'CAPTURED', 'detailedStatus' => 'REFUNDED'],
+        ]),
+    ]);
+
+    $answer = SystemPay::refund('UUID789', 1000, 'EUR');
+
+    expect($answer)->toBe(['uuid' => 'UUID789', 'status' => 'CAPTURED', 'detailedStatus' => 'REFUNDED']);
+
+    Http::assertSent(function ($request) {
+        return $request['uuid'] === 'UUID789'
+            && $request['amount'] === 1000
+            && $request['currency'] === 'EUR'
+            && $request['resolutionMode'] === 'REFUND_ONLY';
+    });
+});
+
+test('refund without an amount omits amount and currency to refund the full transaction', function () {
+    Http::fake(['api.systempay.fr/*' => Http::response(['status' => 'SUCCESS', 'answer' => []])]);
+
+    SystemPay::refund('UUID789');
+
+    Http::assertSent(function ($request) {
+        return $request['uuid'] === 'UUID789'
+            && !isset($request['amount'])
+            && !isset($request['currency'])
+            && $request['resolutionMode'] === 'REFUND_ONLY';
+    });
+});
+
+test('cancelOrRefund defaults to AUTO resolution mode', function () {
+    Http::fake(['api.systempay.fr/*' => Http::response(['status' => 'SUCCESS', 'answer' => []])]);
+
+    SystemPay::cancelOrRefund('UUID789');
+
+    Http::assertSent(fn ($request) => $request['resolutionMode'] === 'AUTO');
+});
+
+test('cancelOrRefund throws a SystemPayApiException when the API returns an error status', function () {
+    Http::fake([
+        'api.systempay.fr/*' => Http::response([
+            'status' => 'ERROR',
+            'answer' => ['errorCode' => 'PSP_100', 'errorMessage' => 'Transaction not found'],
+        ]),
+    ]);
+
+    try {
+        SystemPay::cancel('UUID789');
+        expect(false)->toBeTrue('Expected SystemPayApiException to be thrown');
+    } catch (SystemPayApiException $e) {
+        expect($e->getMessage())->toContain('Transaction not found')
+            ->and($e->getMessage())->toContain('PSP_100')
+            ->and($e->response())->toHaveKey('status', 'ERROR');
+    }
+});
+
+test('cancelOrRefund throws when the REST API password is missing', function () {
+    config()->set('systempay.no_password', [
+        'site_id' => '12345678',
+        'key' => '1122334455667788',
+        'env' => 'TEST',
+    ]);
+
+    SystemPay::cancelOrRefund('UUID789', config: 'no_password');
+})->throws(SystemPayConfigException::class, 'No REST API credentials (site_id/password) found for config no_password');
+
+test('cancelOrRefund throws when the config is not found', function () {
+    SystemPay::cancelOrRefund('UUID789', config: 'noconfig');
+})->throws(SystemPayConfigException::class, 'No configuration "noconfig" found');
+
+test('cancelOrRefund uses a custom rest_api_url when configured', function () {
+    config()->set('systempay.custom_rest', [
+        'site_id' => '12345678',
+        'key' => '1122334455667788',
+        'env' => 'TEST',
+        'password' => 'testpassword_1122334455667788',
+        'rest_api_url' => 'https://custom.example.com/api-payment/V4',
+    ]);
+
+    Http::fake(['custom.example.com/*' => Http::response(['status' => 'SUCCESS', 'answer' => []])]);
+
+    SystemPay::cancelOrRefund('UUID789', config: 'custom_rest');
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://custom.example.com/api-payment/V4/Transaction/CancelOrRefund');
+});
+
+test('getTransaction retrieves a transaction by uuid', function () {
+    Http::fake([
+        'api.systempay.fr/*' => Http::response([
+            'status' => 'SUCCESS',
+            'answer' => ['uuid' => 'UUID789', 'amount' => 5124, 'currency' => '978', 'status' => 'CAPTURED'],
+        ]),
+    ]);
+
+    $transaction = SystemPay::getTransaction('UUID789');
+
+    expect($transaction)->toBe(['uuid' => 'UUID789', 'amount' => 5124, 'currency' => '978', 'status' => 'CAPTURED']);
+
+    Http::assertSent(function ($request) {
+        return $request->url() === 'https://api.systempay.fr/api-payment/V4/Transaction/Get'
+            && $request->method() === 'POST'
+            && $request['uuid'] === 'UUID789'
+            && $request->hasHeader('Authorization', 'Basic '.base64_encode('12345678:testpassword_1122334455667788'));
+    });
+});
+
+test('getTransaction throws a SystemPayApiException when the API returns an error status', function () {
+    Http::fake([
+        'api.systempay.fr/*' => Http::response([
+            'status' => 'ERROR',
+            'answer' => ['errorCode' => 'PSP_050', 'errorMessage' => 'Transaction not found'],
+        ]),
+    ]);
+
+    try {
+        SystemPay::getTransaction('UUID789');
+        expect(false)->toBeTrue('Expected SystemPayApiException to be thrown');
+    } catch (SystemPayApiException $e) {
+        expect($e->getMessage())->toContain('Transaction not found')
+            ->and($e->getMessage())->toContain('PSP_050');
+    }
+});
+
+test('getTransaction throws when the REST API password is missing', function () {
+    config()->set('systempay.no_password', [
+        'site_id' => '12345678',
+        'key' => '1122334455667788',
+        'env' => 'TEST',
+    ]);
+
+    SystemPay::getTransaction('UUID789', 'no_password');
+})->throws(SystemPayConfigException::class, 'No REST API credentials (site_id/password) found for config no_password');
