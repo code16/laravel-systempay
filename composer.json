@@ -69,10 +69,10 @@
     "extra": {
         "laravel": {
             "providers": [
-                "SystempayServiceProvider"
+                "Code16\\Systempay\\SystempayServiceProvider"
             ],
             "aliases": {
-                "SystemPay": "Systempay"
+                "SystemPay": "Code16\\Systempay\\Facades\\Systempay"
             }
         }
     },
