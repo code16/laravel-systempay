@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Blade;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
-class SystemPayServiceProvider extends PackageServiceProvider
+class SystempayServiceProvider extends PackageServiceProvider
 {
     protected $defer = false;
 

@@ -1,21 +1,22 @@
 <?php
 
 use Code16\Systempay\Components\Form;
-use Code16\Systempay\Exceptions\InvalidSystemPaySignatureException;
-use Code16\Systempay\Exceptions\SystemPayApiException;
-use Code16\Systempay\Exceptions\SystemPayConfigException;
-use Code16\Systempay\Exceptions\SystemPayMissingPaymentConfigException;
-use Code16\Systempay\Facades\SystemPay;
+use Code16\Systempay\Exceptions\InvalidSystempaySignatureException;
+use Code16\Systempay\Exceptions\SystempayApiException;
+use Code16\Systempay\Exceptions\SystempayConfigException;
+use Code16\Systempay\Exceptions\SystempayMissingPaymentConfigException;
+use Code16\Systempay\Facades\Systempay;
+use Code16\Systempay\WebhookPayload;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Http;
 
 test('config not found', function () {
-    SystemPay::config('noconfig');
-})->throws(SystemPayConfigException::class, 'No configuration "noconfig" found');
+    Systempay::config('noconfig');
+})->throws(SystempayConfigException::class, 'No configuration "noconfig" found');
 
 test('signature sha256', function () {
-    $pay = SystemPay::set([
+    $pay = Systempay::set([
         'amount' => 5124,
         'trans_date' => '20170129130025',
         'trans_id' => '123456',
@@ -29,7 +30,7 @@ test('signature sha256', function () {
 });
 
 test('blade extension', function () {
-    $payment = (new Code16\Systempay\SystemPay())->set([
+    $payment = (new Code16\Systempay\Systempay())->set([
         'amount' => 5124,
         'trans_date' => '20170129130025',
         'trans_id' => '123456',
@@ -44,7 +45,7 @@ test('blade extension', function () {
 });
 
 test('blade component with custom variable name', function () {
-    $myPayment = (new Code16\Systempay\SystemPay())->set([
+    $myPayment = (new Code16\Systempay\Systempay())->set([
         'amount' => 5124,
         'trans_date' => '20170129130025',
         'trans_id' => '123456',
@@ -59,7 +60,7 @@ test('blade component with custom variable name', function () {
 });
 
 test('blade component with default button', function () {
-    $payment = (new Code16\Systempay\SystemPay())->set([
+    $payment = (new Code16\Systempay\Systempay())->set([
         'amount' => 5124,
         'trans_date' => '20170129130025',
         'trans_id' => '123456',
@@ -81,8 +82,28 @@ test('validate signature', function () {
         'signature' => 'onkKR1MfdjBzrD7WB0J87mekhoy6kqGukaFsU+t09gA=',
     ]);
 
-    expect(SystemPay::validateSignature($request))->toBeTrue();
+    expect(Systempay::formatWebhookPayload($request)->validateSignature())->toBeTrue();
 });
+
+test('formatWebhookPayload uses the key from the given configuration', function () {
+    config()->set('systempay.store_uk', [
+        'site_id' => '87654321',
+        'key' => '99887766554433221100',
+        'env' => 'PRODUCTION',
+    ]);
+
+    $request = new Request([
+        'vads_amount' => '1000',
+        'vads_trans_date' => '20250101010101',
+        'vads_site_id' => '87654321',
+        'vads_ctx_mode' => 'PRODUCTION',
+        'signature' => 'Kn9DbAO+UPsMizxZG5ZRAj65JwssNt4cuBN09yJJ5Fk=',
+    ]);
+
+    expect(Systempay::formatWebhookPayload($request, 'store_uk')->validateSignature())->toBeTrue();
+
+    Systempay::formatWebhookPayload($request)->validateSignature();
+})->throws(InvalidSystempaySignatureException::class);
 
 test('is valid payment', function () {
     $request = new Request([
@@ -90,65 +111,64 @@ test('is valid payment', function () {
         'vads_trans_status' => 'ACCEPTED',
     ]);
 
-    expect(SystemPay::isValidPayment($request))->toBeTrue();
+    expect(Systempay::formatWebhookPayload($request)->isValidPayment())->toBeTrue();
 
     $request = new Request([
         'vads_url_check_src' => 'PAY',
         'vads_trans_status' => 'REFUSED',
     ]);
 
-    expect(SystemPay::isValidPayment($request))->toBeFalse();
+    expect(Systempay::formatWebhookPayload($request)->isValidPayment())->toBeFalse();
 });
 
-test('retrieve order and transaction', function () {
+test('format webhook payload', function () {
     $request = new Request([
         'vads_order_id' => 'ORDER123',
         'vads_trans_id' => 'TRANS456',
         'vads_trans_uuid' => 'UUID789',
-    ]);
-
-    [$orderId, $transId, $uuid] = SystemPay::retrieveOrderAndTransaction($request);
-
-    expect($orderId)->toBe('ORDER123')
-        ->and($transId)->toBe('TRANS456')
-        ->and($uuid)->toBe('UUID789');
-});
-
-test('retrieve payment amount and currency', function () {
-    $request = new Request([
         'vads_amount' => '5124',
         'vads_currency' => '978',
+        'vads_trans_status' => 'CAPTURED',
     ]);
 
-    [$amount, $currency] = SystemPay::retrievePaymentAmountAndCurrency($request);
+    $payload = Systempay::formatWebhookPayload($request);
 
-    expect($amount)->toBe(5124)
-        ->and($currency)->toBe('978');
+    expect($payload)->toBeInstanceOf(WebhookPayload::class)
+        ->and($payload->orderId)->toBe('ORDER123')
+        ->and($payload->transactionId)->toBe('TRANS456')
+        ->and($payload->transactionUuid)->toBe('UUID789')
+        ->and($payload->amount)->toBe(5124)
+        ->and($payload->currencyCode)->toBe('978')
+        ->and($payload->status)->toBe('CAPTURED');
 });
 
-test('retrieve payment amount and currency defaults to zero amount and empty currency when missing', function () {
+test('format webhook payload defaults to zero amount and empty strings when missing', function () {
     $request = new Request();
 
-    [$amount, $currency] = SystemPay::retrievePaymentAmountAndCurrency($request);
+    $payload = Systempay::formatWebhookPayload($request);
 
-    expect($amount)->toBe(0)
-        ->and($currency)->toBe('');
+    expect($payload->orderId)->toBe('')
+        ->and($payload->transactionId)->toBe('')
+        ->and($payload->transactionUuid)->toBe('')
+        ->and($payload->amount)->toBe(0)
+        ->and($payload->currencyCode)->toBe('')
+        ->and($payload->status)->toBe('');
 });
 
 test('set stores amount as the integer cents given, with no unit conversion', function () {
-    $pay = (new Code16\Systempay\SystemPay())->set('amount', 5124);
+    $pay = (new Code16\Systempay\Systempay())->set('amount', 5124);
 
     expect($pay->prepareFormParams()['vads_amount'])->toBe('5124');
 });
 
 test('set removes a param when value is null or an empty string', function () {
-    $pay = (new Code16\Systempay\SystemPay())
+    $pay = (new Code16\Systempay\Systempay())
         ->set('trans_id', '123456')
         ->set('trans_id', null);
 
     expect($pay->prepareFormParams())->not->toHaveKey('vads_trans_id');
 
-    $pay = (new Code16\Systempay\SystemPay())
+    $pay = (new Code16\Systempay\Systempay())
         ->set('trans_id', '123456')
         ->set('trans_id', '');
 
@@ -156,7 +176,7 @@ test('set removes a param when value is null or an empty string', function () {
 });
 
 test('set treats vads_-prefixed and unprefixed keys as the same param', function () {
-    $pay = (new Code16\Systempay\SystemPay())
+    $pay = (new Code16\Systempay\Systempay())
         ->set('trans_id', 'FIRST')
         ->set('vads_trans_id', 'SECOND');
 
@@ -168,7 +188,7 @@ test('set treats vads_-prefixed and unprefixed keys as the same param', function
 });
 
 test('config seeds the expected default params', function () {
-    $params = (new Code16\Systempay\SystemPay())->prepareFormParams();
+    $params = (new Code16\Systempay\Systempay())->prepareFormParams();
 
     expect($params['vads_site_id'])->toBe('12345678')
         ->and($params['vads_ctx_mode'])->toBe('TEST')
@@ -188,7 +208,7 @@ test('config allows a custom api url', function () {
         'api_url' => 'https://custom.example.com/vads-payment/',
     ]);
 
-    $pay = (new Code16\Systempay\SystemPay())->config('custom');
+    $pay = (new Code16\Systempay\Systempay())->config('custom');
 
     expect($pay->url)->toBe('https://custom.example.com/vads-payment/');
 });
@@ -202,14 +222,14 @@ test('validate signature throws when the sent signature does not match', functio
         'signature' => 'not-the-right-signature',
     ]);
 
-    SystemPay::validateSignature($request);
-})->throws(InvalidSystemPaySignatureException::class);
+    Systempay::formatWebhookPayload($request)->validateSignature();
+})->throws(InvalidSystempaySignatureException::class);
 
-test('validate signature throws when the config key is missing', function () {
+test('formatWebhookPayload throws when the config key is missing', function () {
     $request = new Request(['signature' => 'irrelevant']);
 
-    SystemPay::validateSignature($request, 'missing');
-})->throws(SystemPayConfigException::class, 'No key found for config missing');
+    Systempay::formatWebhookPayload($request, 'missing');
+})->throws(SystempayConfigException::class, 'No key found for config missing');
 
 test('config throws when the key is missing', function () {
     config()->set('systempay.no_key', [
@@ -217,8 +237,8 @@ test('config throws when the key is missing', function () {
         'env' => 'TEST',
     ]);
 
-    new Code16\Systempay\SystemPay('no_key');
-})->throws(SystemPayConfigException::class, 'No key found for config no_key');
+    new Code16\Systempay\Systempay('no_key');
+})->throws(SystempayConfigException::class, 'No key found for config no_key');
 
 test('is valid payment returns false when url check src is not PAY', function () {
     $request = new Request([
@@ -226,7 +246,7 @@ test('is valid payment returns false when url check src is not PAY', function ()
         'vads_trans_status' => 'ACCEPTED',
     ]);
 
-    expect(SystemPay::isValidPayment($request))->toBeFalse();
+    expect(Systempay::formatWebhookPayload($request)->isValidPayment())->toBeFalse();
 });
 
 test('is valid payment accepts a custom list of valid statuses', function () {
@@ -235,13 +255,15 @@ test('is valid payment accepts a custom list of valid statuses', function () {
         'vads_trans_status' => 'CUSTOM_STATUS',
     ]);
 
-    expect(SystemPay::isValidPayment($request))->toBeFalse()
-        ->and(SystemPay::isValidPayment($request, ['CUSTOM_STATUS']))->toBeTrue();
+    $payload = Systempay::formatWebhookPayload($request);
+
+    expect($payload->isValidPayment())->toBeFalse()
+        ->and($payload->isValidPayment(['CUSTOM_STATUS']))->toBeTrue();
 });
 
 test('form component throws when no payment config is provided', function () {
     new Form();
-})->throws(SystemPayMissingPaymentConfigException::class, 'Please provide a SystemPay payment configuration to build the form');
+})->throws(SystempayMissingPaymentConfigException::class, 'Please provide a SystemPay payment configuration to build the form');
 
 test('cancel sends a CANCELLATION_ONLY request to Transaction/CancelOrRefund', function () {
     Http::fake([
@@ -251,7 +273,7 @@ test('cancel sends a CANCELLATION_ONLY request to Transaction/CancelOrRefund', f
         ]),
     ]);
 
-    $answer = SystemPay::cancel('UUID789', 'customer request');
+    $answer = Systempay::cancel('UUID789', 'customer request');
 
     expect($answer)->toBe(['uuid' => 'UUID789', 'status' => 'UNPAID', 'detailedStatus' => 'CANCELLED']);
 
@@ -275,7 +297,7 @@ test('refund sends a REFUND_ONLY request with the given amount and currency', fu
         ]),
     ]);
 
-    $answer = SystemPay::refund('UUID789', 1000, 'EUR');
+    $answer = Systempay::refund('UUID789', 1000, 'EUR');
 
     expect($answer)->toBe(['uuid' => 'UUID789', 'status' => 'CAPTURED', 'detailedStatus' => 'REFUNDED']);
 
@@ -290,7 +312,7 @@ test('refund sends a REFUND_ONLY request with the given amount and currency', fu
 test('refund without an amount omits amount and currency to refund the full transaction', function () {
     Http::fake(['api.systempay.fr/*' => Http::response(['status' => 'SUCCESS', 'answer' => []])]);
 
-    SystemPay::refund('UUID789');
+    Systempay::refund('UUID789');
 
     Http::assertSent(function ($request) {
         return $request['uuid'] === 'UUID789'
@@ -303,7 +325,7 @@ test('refund without an amount omits amount and currency to refund the full tran
 test('cancelOrRefund defaults to AUTO resolution mode', function () {
     Http::fake(['api.systempay.fr/*' => Http::response(['status' => 'SUCCESS', 'answer' => []])]);
 
-    SystemPay::cancelOrRefund('UUID789');
+    Systempay::cancelOrRefund('UUID789');
 
     Http::assertSent(fn ($request) => $request['resolutionMode'] === 'AUTO');
 });
@@ -317,9 +339,9 @@ test('cancelOrRefund throws a SystemPayApiException when the API returns an erro
     ]);
 
     try {
-        SystemPay::cancel('UUID789');
+        Systempay::cancel('UUID789');
         expect(false)->toBeTrue('Expected SystemPayApiException to be thrown');
-    } catch (SystemPayApiException $e) {
+    } catch (SystempayApiException $e) {
         expect($e->getMessage())->toContain('Transaction not found')
             ->and($e->getMessage())->toContain('PSP_100')
             ->and($e->response())->toHaveKey('status', 'ERROR');
@@ -333,25 +355,27 @@ test('cancelOrRefund throws when the REST API password is missing', function () 
         'env' => 'TEST',
     ]);
 
-    SystemPay::cancelOrRefund('UUID789', config: 'no_password');
-})->throws(SystemPayConfigException::class, 'No REST API credentials (site_id/password) found for config no_password');
+    Systempay::cancelOrRefund('UUID789', config: 'no_password');
+})->throws(SystempayConfigException::class, 'No REST API credentials (site_id/password) found for config no_password');
 
 test('cancelOrRefund throws when the config is not found', function () {
-    SystemPay::cancelOrRefund('UUID789', config: 'noconfig');
-})->throws(SystemPayConfigException::class, 'No configuration "noconfig" found');
+    Systempay::cancelOrRefund('UUID789', config: 'noconfig');
+})->throws(SystempayConfigException::class, 'No configuration "noconfig" found');
 
 test('cancelOrRefund uses a custom rest_api_url when configured', function () {
     config()->set('systempay.custom_rest', [
         'site_id' => '12345678',
         'key' => '1122334455667788',
         'env' => 'TEST',
-        'password' => 'testpassword_1122334455667788',
+        'rest' => [
+            'password' => 'testpassword_1122334455667788',
+        ],
         'rest_api_url' => 'https://custom.example.com/api-payment/V4',
     ]);
 
     Http::fake(['custom.example.com/*' => Http::response(['status' => 'SUCCESS', 'answer' => []])]);
 
-    SystemPay::cancelOrRefund('UUID789', config: 'custom_rest');
+    Systempay::cancelOrRefund('UUID789', config: 'custom_rest');
 
     Http::assertSent(fn ($request) => $request->url() === 'https://custom.example.com/api-payment/V4/Transaction/CancelOrRefund');
 });
@@ -364,7 +388,7 @@ test('getTransaction retrieves a transaction by uuid', function () {
         ]),
     ]);
 
-    $transaction = SystemPay::getTransaction('UUID789');
+    $transaction = Systempay::getTransaction('UUID789');
 
     expect($transaction)->toBe(['uuid' => 'UUID789', 'amount' => 5124, 'currency' => '978', 'status' => 'CAPTURED']);
 
@@ -385,9 +409,9 @@ test('getTransaction throws a SystemPayApiException when the API returns an erro
     ]);
 
     try {
-        SystemPay::getTransaction('UUID789');
+        Systempay::getTransaction('UUID789');
         expect(false)->toBeTrue('Expected SystemPayApiException to be thrown');
-    } catch (SystemPayApiException $e) {
+    } catch (SystempayApiException $e) {
         expect($e->getMessage())->toContain('Transaction not found')
             ->and($e->getMessage())->toContain('PSP_050');
     }
@@ -400,5 +424,5 @@ test('getTransaction throws when the REST API password is missing', function () 
         'env' => 'TEST',
     ]);
 
-    SystemPay::getTransaction('UUID789', 'no_password');
-})->throws(SystemPayConfigException::class, 'No REST API credentials (site_id/password) found for config no_password');
+    Systempay::getTransaction('UUID789', 'no_password');
+})->throws(SystempayConfigException::class, 'No REST API credentials (site_id/password) found for config no_password');

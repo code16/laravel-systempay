@@ -4,7 +4,7 @@ namespace Code16\Systempay\Exceptions;
 
 use Exception;
 
-class SystemPayApiException extends Exception
+class SystempayApiException extends Exception
 {
     /**
      * @param  array  $response  The decoded JSON response from the Systempay REST API

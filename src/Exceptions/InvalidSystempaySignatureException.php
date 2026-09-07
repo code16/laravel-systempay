@@ -4,6 +4,6 @@ namespace Code16\Systempay\Exceptions;
 
 use Exception;
 
-class InvalidSystemPaySignatureException extends Exception
+class InvalidSystempaySignatureException extends Exception
 {
 }

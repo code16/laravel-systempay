@@ -15,7 +15,7 @@
         {
             "name": "Lucien PUGET",
             "email": "lucien.puget@code16.fr",
-            "role": "Developer"
+            "role": "Maintainer"
         },
         {
             "name": "Sébastien HEYD",
@@ -69,10 +69,10 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Code16\\Systempay\\SystemPayServiceProvider"
+                "SystempayServiceProvider"
             ],
             "aliases": {
-                "SystemPay": "Code16\\Systempay\\Facades\\SystemPay"
+                "SystemPay": "Systempay"
             }
         }
     },

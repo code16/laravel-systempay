@@ -35,8 +35,11 @@ return [
         'site_id' => 'YOUR_SITE_ID',
         'key'     => env('SYSTEMPAY_SITE_KEY', 'YOUR_KEY'),
         'env'     => env('SYSTEMPAY_ENV', 'PRODUCTION'),
-        // if using API REST
-        'password' => env('SYSTEMPAY_REST_API_PASSWORD'),
+
+        'rest' => [
+            // Only required to use cancel()/refund()/cancelOrRefund()/getTransaction().
+            'password' => env('SYSTEMPAY_REST_API_PASSWORD'),
+        ],
     ]
 ];
 ```
@@ -45,9 +48,9 @@ You need to set `YOUR_SITE_ID` and `YOUR_KEY` with your own values. This two val
 
 `key` is only used to sign/verify the payment form and IPN callbacks. To use `cancel()`, `refund()`,
 `cancelOrRefund()` (see [Cancel or refund a payment](#cancel-or-refund-a-payment)) or `getTransaction()`
-(see [Get a transaction](#get-a-transaction)), you also need to set `password`, the REST API password
-found in the Back Office, under **Paramétrage > Boutique > Clés d'API REST** (use the test or
-production password depending on `env`).
+(see [Get a transaction](#get-a-transaction)), you also need to set `rest.password`, the REST API
+password found in the Back Office, under **Paramétrage > Boutique > Clés d'API REST** (use the test
+or production password depending on `env`).
 
 ### Specific parameters
 
@@ -121,7 +124,7 @@ $systemPay = SystemPay::config('store_uk')->set([
 
 When a payment is processed, Systempay sends a POST request to your IPN URL (to be configured in your Systempay back office). 
 
-You can use the `SystemPay` facade to validate the signature and check the payment status.
+You can use the `Systempay` facade to validate the signature and check the payment status.
 
 ```php
 namespace App\Http\Controllers;
@@ -133,23 +136,22 @@ class PaymentCallbackController extends Controller
 {
     public function __invoke(Request $request)
     {
-        // 1. Validate the signature
-        if (! SystemPay::validateSignature($request)) {
+        // 1. Retrieve the webhook data
+        $payload = SystemPay::formatWebhookPayload($request);
+
+        // 2. Validate the signature
+        if (! $payload->validateSignature()) {
             abort(403, 'Invalid signature');
         }
 
-        // 2. Check if the payment is valid (status is ACCEPTED, CAPTURED, or AUTHORISED)
-        if (! SystemPay::isValidPayment($request)) {
+        // 3. Check if the payment is valid (status is ACCEPTED, CAPTURED, or AUTHORISED)
+        if (! $payload->isValidPayment()) {
             // Payment refused or cancelled
             abort(400, 'Invalid payment');
         }
 
-        // 3. Retrieve order information
-        [$orderId, $transId, $uuid] = SystemPay::retrieveOrderAndTransaction($request);
-        
         // 4. Verify the paid amount and currency
-        [$paidAmount, $currencyCode] = SystemPay::retrievePaymentAmountAndCurrency($request);
-        abort_unless(Order::find($orderId)->amount == $paidAmount, 400, 'Invalid amount');
+        abort_unless(Order::find($payload->orderId)->amount == $payload->amount, 400, 'Invalid amount');
 
         // Update your database...
 
@@ -158,24 +160,42 @@ class PaymentCallbackController extends Controller
 }
 ```
 
+### Webhook payload
+
+`formatWebhookPayload()` looks up the signing key for the given configuration (`default` unless
+specified) and returns a `Code16\Systempay\WebhookPayload` object with the following read-only
+properties:
+
+| property | type | source field |
+|---|---|---|
+| `orderId` | `string` | `vads_order_id` |
+| `transactionId` | `string` | `vads_trans_id` |
+| `transactionUuid` | `string` | `vads_trans_uuid` |
+| `amount` | `int` | `vads_amount` |
+| `currencyCode` | `string` | `vads_currency` |
+| `status` | `string` | `vads_trans_status` |
+
+It also exposes `validateSignature()` and `isValidPayment()`, so the whole IPN payload — data and
+validation — comes from a single object.
+
 ### Signature validation for specific configuration
 
-If you have multiple configurations, pass the configuration name to `validateSignature`:
+If you have multiple configurations, pass the configuration name to `formatWebhookPayload`:
 
 ```php
-SystemPay::validateSignature($request, 'store_uk');
+SystemPay::formatWebhookPayload($request, 'store_uk')->validateSignature();
 ```
 
 ### Customize valid payment status
 
-By default, `isValidPayment` returns true if the status is `CAPTURED`, `ACCEPTED`, or `AUTHORISED`. You can customize this by passing an array of valid statuses as the second parameter:
+By default, `isValidPayment()` returns true if the status is `CAPTURED`, `ACCEPTED`, or `AUTHORISED`. You can customize this by passing an array of valid statuses as the parameter:
 
 ```php
-SystemPay::isValidPayment($request, ['CAPTURED']);
+$payload->isValidPayment(['CAPTURED']);
 ```
 
 ## Create a payment form
-To create a payment form, you can use the `SystemPay` facade.
+To create a payment form, you can use the `Systempay` facade.
 
 In your controller :
 
@@ -214,7 +234,7 @@ In your view
 
 Use `cancel()` to cancel a transaction that has not been captured yet (i.e. before it is remised
 en banque), and `refund()` to refund a captured transaction, totally or partially. Both need the
-transaction `uuid`, as returned by `retrieveOrderAndTransaction()`.
+transaction `uuid`, as returned by `formatWebhookPayload()`.
 
 ```php
 use SystemPay;
@@ -235,11 +255,11 @@ Both throw `Code16\Systempay\Exceptions\SystemPayApiException` if Systempay reje
 Systempay:
 
 ```php
-use Code16\Systempay\Exceptions\SystemPayApiException;
+use Code16\Systempay\Exceptions\SystempayApiException;
 
 try {
     SystemPay::refund($uuid);
-} catch (SystemPayApiException $e) {
+} catch (SystempayApiException $e) {
     logger()->error($e->getMessage(), $e->response());
 }
 ```
@@ -262,7 +282,7 @@ SystemPay::refund($uuid, config: 'store_uk');
 ## Get a transaction
 
 Use `getTransaction()` to retrieve all the data Systempay holds for a transaction, identified by
-its `uuid` (as returned by `retrieveOrderAndTransaction()`):
+its `uuid` (as returned by `formatWebhookPayload()`):
 
 ```php
 $transaction = SystemPay::getTransaction($uuid);
@@ -272,7 +292,7 @@ $transaction['amount']; // in the smallest currency unit (e.g. cents for EUR)
 ```
 
 It calls the `Transaction/Get` Web Service and, like `cancel()`/`refund()`, throws
-`SystemPayApiException` if Systempay rejects the request, and accepts a configuration name as the
+`SystempayApiException` if Systempay rejects the request, and accepts a configuration name as the
 second argument:
 
 ```php

@@ -2,17 +2,17 @@
 
 namespace Code16\Systempay\Components;
 
-use Code16\Systempay\Exceptions\SystemPayMissingPaymentConfigException;
-use Code16\Systempay\SystemPay;
+use Code16\Systempay\Exceptions\SystempayMissingPaymentConfigException;
+use Code16\Systempay\Systempay;
 use Illuminate\View\Component;
 
 class Form extends Component
 {
     public function __construct(
-        protected ?SystemPay $config = null
+        protected ?Systempay $config = null
     ) {
         if (!$config) {
-            throw new SystemPayMissingPaymentConfigException('Please provide a SystemPay payment configuration to build the form');
+            throw new SystempayMissingPaymentConfigException('Please provide a SystemPay payment configuration to build the form');
         }
     }
 

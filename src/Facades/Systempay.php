@@ -5,12 +5,12 @@ namespace Code16\Systempay\Facades;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @see \Code16\Systempay\SystemPay
+ * @see \Code16\Systempay\Systempay
  */
-class SystemPay extends Facade
+class Systempay extends Facade
 {
     protected static function getFacadeAccessor(): string
     {
-        return \Code16\Systempay\SystemPay::class;
+        return \Code16\Systempay\Systempay::class;
     }
 }

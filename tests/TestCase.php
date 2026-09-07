@@ -2,7 +2,7 @@
 
 namespace Code16\Systempay\Tests;
 
-use Code16\Systempay\SystemPayServiceProvider;
+use Code16\Systempay\SystempayServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
 class TestCase extends Orchestra
@@ -10,7 +10,7 @@ class TestCase extends Orchestra
     protected function getPackageProviders($app)
     {
         return [
-            SystemPayServiceProvider::class,
+            SystempayServiceProvider::class,
         ];
     }
 
@@ -21,7 +21,9 @@ class TestCase extends Orchestra
                 'site_id' => '12345678',
                 'key' => '1122334455667788',
                 'env' => 'TEST',
-                'password' => 'testpassword_1122334455667788',
+                'rest' => [
+                    'password' => 'testpassword_1122334455667788',
+                ],
             ],
         ]);
     }

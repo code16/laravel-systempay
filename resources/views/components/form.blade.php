@@ -1,17 +1,17 @@
-@php use Code16\Systempay\SystemPay; @endphp
+@php use Code16\Systempay\Systempay; @endphp
 @props([
-    /** @var SystemPay $config */
+    /** @var Systempay $config */
     'config',
     'button' => null
 ])
 <form method="post" action="{{$config->url}}" accept-charset="UTF-8">
-@foreach($config->prepareFormParams() as $key => $value)
-<input type="hidden" name="{{ $key }}" value="{{ $value }}">
-@endforeach
-{{ $slot ?? '' }}
-@if(!$button && isset($slot) && $slot->isEmpty())
-<button type="submit">Pay</button>
-@elseif(isset($slot) && $slot->isEmpty())
-{{ $button }}
-@endif
+    @foreach($config->prepareFormParams() as $key => $value)
+        <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+    @endforeach
+    {{ $slot ?? '' }}
+    @if(!$button && isset($slot) && $slot->isEmpty())
+        <button type="submit">Pay</button>
+    @elseif(isset($slot) && $slot->isEmpty())
+        {{ $button }}
+    @endif
 </form>
