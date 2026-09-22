@@ -72,7 +72,7 @@
                 "Code16\\Systempay\\SystempayServiceProvider"
             ],
             "aliases": {
-                "SystemPay": "Code16\\Systempay\\Facades\\Systempay"
+                "Systempay": "Code16\\Systempay\\Facades\\Systempay"
             }
         }
     },
