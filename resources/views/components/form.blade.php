@@ -4,7 +4,7 @@
     'config',
     'button' => null
 ])
-<form method="post" action="{{$config->url}}" accept-charset="UTF-8">
+<form method="post" action="{{$config->url}}" accept-charset="UTF-8" autocomplete="off">
     @foreach($config->prepareFormParams() as $key => $value)
         <input type="hidden" name="{{ $key }}" value="{{ $value }}">
     @endforeach
