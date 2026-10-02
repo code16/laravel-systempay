@@ -5,9 +5,6 @@ namespace Code16\Systempay;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use function App\Services\collect;
-use function App\Services\config;
-use function App\Services\route;
 
 /**
  * Local dev only: posts Systempay return params to our own IPN endpoint, as Systempay would do
@@ -16,6 +13,15 @@ use function App\Services\route;
  */
 class FakeIpnClient
 {
+    public function __construct(private string $route, private string $config = 'default')
+    {
+    }
+
+    public static function make(string $route, string $config = 'default'): FakeIpnClient
+    {
+        return new FakeIpnClient($route, $config);
+    }
+
     /**
      * @param  array<string, mixed>  $params
      *
@@ -29,12 +35,12 @@ class FakeIpnClient
             ->put('vads_url_check_src', 'PAY')
             ->sortKeys();
 
-        $key = config('systempay.default.key');
+        $key = config("systempay.{$this->config}.key");
         $signature = base64_encode(hash_hmac('sha256', $params->implode('+').'+'.$key, $key, true));
 
         return Http::asForm()
             ->withoutVerifying()
-            ->post(route('webhooks.systempay'), [...$params, 'signature' => $signature])
+            ->post($this->route, [...$params, 'signature' => $signature])
             ->throw();
     }
 }
