@@ -1,6 +1,6 @@
 <?php
 
-use App\Services\FakeIpnClient;
+use Code16\Systempay\FakeIpnClient;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
