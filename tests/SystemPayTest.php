@@ -426,3 +426,82 @@ test('getTransaction throws when the REST API password is missing', function () 
 
     Systempay::getTransaction('UUID789', 'no_password');
 })->throws(SystempayConfigException::class, 'No REST API credentials (site_id/password) found for config no_password');
+
+test('format webhook payload accepts a plain array', function () {
+    $payload = Systempay::formatWebhookPayload([
+        'vads_order_id' => 'ORDER123',
+        'vads_trans_id' => 'TRANS456',
+        'vads_trans_uuid' => 'UUID789',
+        'vads_amount' => '5124',
+        'vads_currency' => '978',
+        'vads_trans_status' => 'CAPTURED',
+        'vads_url_check_src' => 'PAY',
+    ]);
+
+    expect($payload->orderId)->toBe('ORDER123')
+        ->and($payload->transactionId)->toBe('TRANS456')
+        ->and($payload->transactionUuid)->toBe('UUID789')
+        ->and($payload->amount)->toBe(5124)
+        ->and($payload->currencyCode)->toBe('978')
+        ->and($payload->status)->toBe('CAPTURED')
+        ->and($payload->isValidPayment())->toBeTrue();
+});
+
+test('format webhook payload defaults to zero amount and empty strings when given an empty array', function () {
+    $payload = Systempay::formatWebhookPayload([]);
+
+    expect($payload->orderId)->toBe('')
+        ->and($payload->amount)->toBe(0)
+        ->and($payload->status)->toBe('');
+});
+
+test('validate signature works with a plain array', function () {
+    $payload = Systempay::formatWebhookPayload([
+        'vads_amount' => '5124',
+        'vads_trans_date' => '20170129130025',
+        'vads_site_id' => '12345678',
+        'vads_ctx_mode' => 'TEST',
+        'signature' => 'onkKR1MfdjBzrD7WB0J87mekhoy6kqGukaFsU+t09gA=',
+    ]);
+
+    expect($payload->validateSignature())->toBeTrue();
+});
+
+test('validate signature throws with a plain array when the signature does not match', function () {
+    Systempay::formatWebhookPayload([
+        'vads_amount' => '5124',
+        'signature' => 'not-the-right-signature',
+    ])->validateSignature();
+})->throws(InvalidSystempaySignatureException::class);
+
+test('is cancelled payment', function (string $status, bool $expected) {
+    $payload = Systempay::formatWebhookPayload(['vads_trans_status' => $status]);
+
+    expect($payload->isCancelledPayment())->toBe($expected);
+})->with([
+    ['ABANDONED', true],
+    ['CANCELLED', true],
+    ['EXPIRED', true],
+    ['NOT_CREATED', true],
+    ['REFUSED', true],
+    ['CAPTURED', false],
+    ['ACCEPTED', false],
+    ['AUTHORISED', false],
+    ['', false],
+]);
+
+test('is cancelled payment does not depend on url check src', function () {
+    $payload = Systempay::formatWebhookPayload([
+        'vads_url_check_src' => 'BATCH_AUTO',
+        'vads_trans_status' => 'EXPIRED',
+    ]);
+
+    expect($payload->isCancelledPayment())->toBeTrue();
+});
+
+test('is cancelled payment accepts a custom list of cancelled statuses', function () {
+    $payload = Systempay::formatWebhookPayload(['vads_trans_status' => 'REFUSED']);
+
+    expect($payload->isCancelledPayment(['CANCELLED']))->toBeFalse()
+        ->and($payload->isCancelledPayment(['REFUSED', 'CUSTOM_STATUS']))->toBeTrue();
+});

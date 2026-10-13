@@ -118,12 +118,12 @@ class Systempay
     }
 
     /**
-     * @param  Request  $request  The IPN request
+     * @param  Request|array  $request  The IPN request
      * @param  string  $config  The config profile to use
      *
      * @throws SystempayConfigException
      */
-    public function formatWebhookPayload(Request $request, string $config = 'default'): WebhookPayload
+    public function formatWebhookPayload(Request|array $request, string $config = 'default'): WebhookPayload
     {
         $key = config("systempay.{$config}.key");
 

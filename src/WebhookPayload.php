@@ -4,6 +4,7 @@ namespace Code16\Systempay;
 
 use Code16\Systempay\Exceptions\InvalidSystempaySignatureException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Fluent;
 use Illuminate\Support\Str;
 
 /**
@@ -27,8 +28,12 @@ final readonly class WebhookPayload
     ) {
     }
 
-    public static function fromRequest(Request $request, string $key): self
+    public static function fromRequest(Request|array $request, string $key): self
     {
+        if (is_array($request)) {
+            $request = new Fluent($request);
+        }
+
         $signedParams = collect($request->all())
             ->filter(fn ($value, $paramName) => Str::startsWith($paramName, 'vads_'))
             ->sortKeys()
@@ -79,5 +84,13 @@ final readonly class WebhookPayload
     {
         return $this->urlCheckSrc === 'PAY'
             && in_array($this->status, $validStatus);
+    }
+
+    /**
+     * @param  array  $cancelledStatus  The list of cancelled status (default: ['ABANDONED', 'CANCELLED', 'EXPIRED', 'NOT_CREATED', 'REFUSED'])
+     */
+    public function isCancelledPayment(array $cancelledStatus = ['ABANDONED', 'CANCELLED', 'EXPIRED', 'NOT_CREATED', 'REFUSED']): bool
+    {
+        return in_array($this->status, $cancelledStatus);
     }
 }
