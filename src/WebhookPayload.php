@@ -22,6 +22,7 @@ final readonly class WebhookPayload
         public string $currencyCode,
         public string $status,
         private string $urlCheckSrc,
+        private string $appEnvironment,
         private array $signedParams,
         private string $signature,
         private string $key,
@@ -48,6 +49,7 @@ final readonly class WebhookPayload
             currencyCode: $request->string('vads_currency')->toString(),
             status: $request->string('vads_trans_status')->toString(),
             urlCheckSrc: $request->string('vads_url_check_src')->toString(),
+            appEnvironment: $request->string('vads_ext_info_app_env')->toString(),
             signedParams: $signedParams,
             signature: $request->string('signature')->toString(),
             key: $key,
@@ -92,5 +94,15 @@ final readonly class WebhookPayload
     public function isCancelledPayment(array $cancelledStatus = ['ABANDONED', 'CANCELLED', 'EXPIRED', 'NOT_CREATED', 'REFUSED']): bool
     {
         return in_array($this->status, $cancelledStatus);
+    }
+
+    /**
+     * Whether the payment was initiated from the current app environment (sent as
+     * vads_ext_info_app_env in the payment form), e.g. to ignore IPN calls for payments made
+     * from a staging app sharing the same Systempay shop.
+     */
+    public function isValidAppEnvironment(): bool
+    {
+        return $this->appEnvironment === app()->environment();
     }
 }

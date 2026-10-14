@@ -62,6 +62,7 @@ class Systempay
             'payment_config' => 'SINGLE',
             'version' => 'V2',
             'currency' => '978',
+            'ext_info_app_env' => app()->environment(),
         ]);
 
         return $this;
