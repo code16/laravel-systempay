@@ -26,7 +26,7 @@ test('signature sha256', function () {
         'pay' => $pay,
     ]);
 
-    expect($render)->toMatch('#name="signature" value="ycA5Do5tNvsnKdc\/eP1bj2xa19z9q3iWPy9\/rpesfS0\="#');
+    expect($render)->toMatch('#name="signature" value="C93wmcmVFqylpCIqECh9ipstLiEn5cdPTdueSBPqAi0\="#');
 });
 
 test('blade extension', function () {
@@ -197,7 +197,8 @@ test('config seeds the expected default params', function () {
         ->and($params['vads_action_mode'])->toBe('INTERACTIVE')
         ->and($params['vads_payment_config'])->toBe('SINGLE')
         ->and($params['vads_version'])->toBe('V2')
-        ->and($params['vads_currency'])->toBe('978');
+        ->and($params['vads_currency'])->toBe('978')
+        ->and($params['vads_ext_info_app_env'])->toBe('testing');
 });
 
 test('config allows a custom api url', function () {
@@ -504,4 +505,16 @@ test('is cancelled payment accepts a custom list of cancelled statuses', functio
 
     expect($payload->isCancelledPayment(['CANCELLED']))->toBeFalse()
         ->and($payload->isCancelledPayment(['REFUSED', 'CUSTOM_STATUS']))->toBeTrue();
+});
+
+test('is valid app environment', function () {
+    expect(Systempay::formatWebhookPayload(['vads_ext_info_app_env' => 'testing'])->isValidAppEnvironment())->toBeTrue()
+        ->and(Systempay::formatWebhookPayload(['vads_ext_info_app_env' => 'production'])->isValidAppEnvironment())->toBeFalse()
+        ->and(Systempay::formatWebhookPayload([])->isValidAppEnvironment())->toBeFalse();
+});
+
+test('is valid app environment matches the app env sent in the payment form', function () {
+    $params = (new Code16\Systempay\Systempay())->prepareFormParams();
+
+    expect(Systempay::formatWebhookPayload($params)->isValidAppEnvironment())->toBeTrue();
 });

@@ -75,6 +75,7 @@ These parameters are set by default :
 | page_action | PAYMENT |  |
 | action_mode | INTERACTIVE |  |
 | version | V2 |  |
+| ext_info_app_env | `app()->environment()` | Sent back in the IPN, see [Check the app environment](#check-the-app-environment) |
 | signature | [generated] | Generated automatically |
 
 Also see [Systempay documentation](https://paiement.systempay.fr/doc/fr-FR/form-payment/quick-start-guide/envoyer-un-formulaire-de-paiement-en-post.html)
@@ -186,7 +187,8 @@ properties:
 | `currencyCode` | `string` | `vads_currency` |
 | `status` | `string` | `vads_trans_status` |
 
-It also exposes `validateSignature()` and `isValidPayment()`, so the whole IPN payload — data and
+It also exposes `validateSignature()`, `isValidPayment()`, `isCancelledPayment()` and
+`isValidAppEnvironment()`, so the whole IPN payload — data and
 validation — comes from a single object.
 
 ### Signature validation for specific configuration
@@ -203,6 +205,19 @@ By default, `isValidPayment()` returns true if the status is `CAPTURED`, `ACCEPT
 
 ```php
 $payload->isValidPayment(['CAPTURED']);
+```
+
+### Check the app environment
+
+The payment form sends the current Laravel environment (`app()->environment()`) as
+`vads_ext_info_app_env`, which Systempay sends back in the IPN. `isValidAppEnvironment()` returns true
+if it matches the environment of the app receiving the IPN, which lets you ignore IPN calls for
+payments initiated by another environment (e.g. a staging app sharing the same Systempay shop):
+
+```php
+if (! $payload->isValidAppEnvironment()) {
+    return response()->json(['status' => 'ignored']);
+}
 ```
 
 ## Testing the IPN locally
