@@ -31,11 +31,17 @@ final readonly class WebhookPayload
 
     public static function fromRequest(Request|array $request, string $key): self
     {
+        // Systempay signs the raw values: read them from the body, before app middleware (TrimStrings...) alters them
+        $rawParams = [];
+        if ($request instanceof Request) {
+            parse_str($request->getContent(), $rawParams);
+        }
+
         if (is_array($request)) {
             $request = new Fluent($request);
         }
 
-        $signedParams = collect($request->all())
+        $signedParams = collect($rawParams ?: $request->all())
             ->filter(fn ($value, $paramName) => Str::startsWith($paramName, 'vads_'))
             ->sortKeys()
             ->values()
