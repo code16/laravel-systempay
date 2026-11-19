@@ -85,6 +85,18 @@ test('validate signature', function () {
     expect(Systempay::formatWebhookPayload($request)->validateSignature())->toBeTrue();
 });
 
+test('validate signature against the raw body when the parsed input was altered', function () {
+    $key = config('systempay.default.key');
+    $params = ['vads_amount' => '5124', 'vads_cust_name' => ' John Doe '];
+    $signature = base64_encode(hash_hmac('sha256', implode('+', $params).'+'.$key, $key, true));
+    $body = http_build_query([...$params, 'signature' => $signature]);
+
+    // Parsed input trimmed, as Laravel's TrimStrings middleware does
+    $request = Request::create('/ipn', 'POST', [...array_map('trim', $params), 'signature' => $signature], content: $body);
+
+    expect(Systempay::formatWebhookPayload($request)->validateSignature())->toBeTrue();
+});
+
 test('formatWebhookPayload uses the key from the given configuration', function () {
     config()->set('systempay.store_uk', [
         'site_id' => '87654321',
