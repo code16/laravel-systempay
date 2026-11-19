@@ -253,8 +253,9 @@ class PaymentReturnController extends Controller
 ```
 
 `post()` only keeps `vads_*` parameters, so you can pass the whole request. It returns the
-`Illuminate\Http\Client\Response` of your IPN endpoint and throws an
-`Illuminate\Http\Client\RequestException` if the endpoint answers with an error status.
+`Illuminate\Http\Client\Response` of your IPN endpoint. If the endpoint answers with an error status,
+it throws an `Illuminate\Http\Exceptions\HttpResponseException` holding that response, so your
+return page displays it as is: in debug mode, you see the exception page of your IPN controller.
 SSL verification is disabled, so self-signed local certificates work.
 
 If you use [several configurations](#additional-configuration), pass the configuration name as the

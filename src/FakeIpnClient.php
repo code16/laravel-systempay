@@ -2,8 +2,8 @@
 
 namespace Code16\Systempay;
 
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -25,7 +25,8 @@ class FakeIpnClient
     /**
      * @param  array<string, mixed>  $params
      *
-     * @throws RequestException
+     * @throws HttpResponseException when the IPN endpoint answers with an error status: its response
+     *                               (e.g. the exception page in debug mode) is sent back to the browser as is
      */
     public function post(array $params): Response
     {
@@ -41,6 +42,8 @@ class FakeIpnClient
         return Http::asForm()
             ->withoutVerifying()
             ->post($this->route, [...$params, 'signature' => $signature])
-            ->throw();
+            ->throw(fn (Response $response) => throw new HttpResponseException(
+                response($response->body(), $response->status(), array_filter(['Content-Type' => $response->header('Content-Type')]))
+            ));
     }
 }

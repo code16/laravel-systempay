@@ -2,6 +2,7 @@
 
 use Code16\Systempay\FakeIpnClient;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Http;
 
 it('posts the return params to the IPN url with vads_url_check_src and a valid signature', function () {
@@ -48,4 +49,20 @@ it('signs the payload with the key of a custom config', function () {
 
         return $data['signature'] === $expectedSignature;
     });
+});
+
+it('sends back the response of the IPN endpoint when it answers with an error status', function () {
+    Http::fake([
+        '*' => Http::response('<html>Exception page of the IPN</html>', 500, ['Content-Type' => 'text/html; charset=utf-8']),
+    ]);
+
+    try {
+        FakeIpnClient::make('https://example.test/systempay/ipn')->post(['vads_trans_id' => 'OXYZ99']);
+        $this->fail('The IPN error was not thrown');
+    } catch (HttpResponseException $exception) {
+        expect($exception->getResponse())
+            ->getStatusCode()->toBe(500)
+            ->getContent()->toBe('<html>Exception page of the IPN</html>')
+            ->and($exception->getResponse()->headers->get('Content-Type'))->toBe('text/html; charset=utf-8');
+    }
 });
